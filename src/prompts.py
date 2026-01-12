@@ -1,12 +1,15 @@
+# src/prompts.py
 """Gear Chain Direction Task Prompts."""
 
 import random
 
 PROMPTS = {
     "default": [
-        "The first gear rotates as shown by the arrow. Predict and show the rotation direction of the last gear in the chain.",
-        "Given the rotation direction of the first gear, determine which way the final gear will rotate. Adjacent gears rotate in opposite directions.",
         "Show the rotation direction of the last gear. Remember: connected gears rotate in opposite directions.",
+        "Determine which way the final gear will rotate based on the chain of connected gears.",
+        "Follow the gear chain and predict the rotation direction of the last gear marked with '?'.",
+        "Adjacent gears rotate in opposite directions. What direction does the last gear rotate?",
+        "Trace the rotation through the gear chain to find the final gear's direction.",
     ],
 }
 

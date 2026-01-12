@@ -1,0 +1,1 @@
+Show the rotation direction of the last gear. Remember: connected gears rotate in opposite directions.

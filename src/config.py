@@ -10,8 +10,8 @@ class TaskConfig(GenerationConfig):
     """
     Gear Chain Direction task configuration.
     
-    Task: Given a chain of connected gears with the first gear's rotation direction,
-    predict the rotation direction of the last gear.
+    Task: Given a chain of connected gears and the first gear's rotation,
+    determine the rotation direction of the last gear.
     """
     
     domain: str = Field(default="gear_chain")
@@ -20,11 +20,15 @@ class TaskConfig(GenerationConfig):
     generate_videos: bool = Field(default=True)
     video_fps: int = Field(default=10)
     
-    # Task-specific settings
-    min_gears: int = Field(default=3, description="Minimum number of gears in chain")
-    max_gears: int = Field(default=7, description="Maximum number of gears in chain")
+    # Gear chain settings
+    min_gears: int = Field(default=3, description="Minimum number of gears")
+    max_gears: int = Field(default=6, description="Maximum number of gears")
+    gear_radius: int = Field(default=40, description="Radius of each gear")
+    gear_gap: int = Field(default=15, description="Gap between adjacent gears (prevents overlap)")
     
-    gear_color: tuple[int, int, int] = Field(default=(100, 100, 100))
-    arrow_color: tuple[int, int, int] = Field(default=(255, 50, 50))
-    highlight_color: tuple[int, int, int] = Field(default=(50, 200, 50))
+    # Colors
     bg_color: tuple[int, int, int] = Field(default=(255, 255, 255))
+    gear_color: tuple[int, int, int] = Field(default=(180, 180, 180))
+    tooth_color: tuple[int, int, int] = Field(default=(120, 120, 120))
+    green_tooth_color: tuple[int, int, int] = Field(default=(50, 200, 50))
+    arrow_color: tuple[int, int, int] = Field(default=(50, 50, 200))

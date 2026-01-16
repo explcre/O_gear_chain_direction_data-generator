@@ -1,21 +1,45 @@
-# src/prompts.py
-"""Gear Chain Direction Task Prompts."""
+"""Gear Chain Direction Task Prompts - Precise version."""
 
-import random
+def get_prompt(task_data: dict) -> str:
+    """Generate a precise prompt that uniquely determines the video output.
+    
+    The prompt specifies:
+    - Number of gears and their arrangement
+    - First gear's rotation direction
+    - The green tooth on each gear
+    - The stopping condition (green teeth of last two gears meet)
+    """
+    num_gears = task_data["num_gears"]
+    first_direction = task_data["first_direction"]
+    last_direction = task_data["last_direction"]
+    line_type = task_data["line_type"]
+    
+    line_desc = {
+        "horizontal": "arranged horizontally in a row",
+        "vertical": "arranged vertically in a column",
+        "diagonal_down": "arranged diagonally from top-left to bottom-right",
+        "diagonal_up": "arranged diagonally from bottom-left to top-right",
+    }[line_type]
+    
+    prompt = f"""A chain of {num_gears} connected gears is {line_desc}.
+Each gear has one GREEN colored tooth.
 
-PROMPTS = {
-    "default": [
-        "Show the rotation direction of the last gear. Remember: connected gears rotate in opposite directions.",
-        "Determine which way the final gear will rotate based on the chain of connected gears.",
-        "Follow the gear chain and predict the rotation direction of the last gear marked with '?'.",
-        "Adjacent gears rotate in opposite directions. What direction does the last gear rotate?",
-        "Trace the rotation through the gear chain to find the final gear's direction.",
-    ],
-}
+G1 (the first gear) rotates {first_direction} (shown by blue arrow).
+Adjacent gears always rotate in OPPOSITE directions.
 
-def get_prompt(task_type: str = "default") -> str:
-    prompts = PROMPTS.get(task_type, PROMPTS["default"])
-    return random.choice(prompts)
+Animation requirements:
+1. All gears rotate according to the direction rules
+2. The rotation STOPS when the green teeth of the last two gears (G{num_gears-1} and G{num_gears}) meet exactly
+3. At the end, G{num_gears}'s rotation direction is revealed with a blue arrow
+4. G{num_gears} is highlighted when the answer is shown
 
-def get_all_prompts(task_type: str = "default") -> list[str]:
-    return PROMPTS.get(task_type, PROMPTS["default"])
+What direction does G{num_gears} rotate? Show the gears rotating until the green teeth alignment stopping condition is met."""
+
+    return prompt
+
+
+def get_all_prompts() -> list[str]:
+    """Return example prompts."""
+    return [
+        "Gear chain with green teeth. Gears rotate until green teeth of last two gears meet exactly."
+    ]

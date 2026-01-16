@@ -1,8 +1,8 @@
-"""Gear Chain Direction Task Prompts - Ultra-detailed version with meeting condition."""
+"""Gear Chain Direction Task Prompts - Updated for realistic meshing."""
 
 
 def get_prompt(task_data: dict) -> str:
-    """Generate an extremely detailed prompt that precisely describes every visual element and animation frame."""
+    """Generate a detailed prompt describing the gear chain with realistic meshing."""
     num_gears = task_data["num_gears"]
     first_direction = task_data["first_direction"]
     last_direction = task_data["last_direction"]
@@ -27,8 +27,10 @@ def get_prompt(task_data: dict) -> str:
         dy = gear_last["y"] - gear_second_last["y"]
         connection_angle_rad = math.atan2(dy, dx)
         connection_angle_deg = math.degrees(connection_angle_rad) % 360
+        center_distance = int(math.sqrt(dx**2 + dy**2))
     else:
         connection_angle_deg = 0
+        center_distance = 0
 
     # Describe each gear's position
     gear_positions = []
@@ -52,6 +54,7 @@ def get_prompt(task_data: dict) -> str:
 
 SCENE DESCRIPTION:
 A chain of {num_gears} circular gears {line_desc} on a white background RGB(255,255,255).
+The gears are positioned CLOSE TOGETHER to create a realistic meshing appearance, where adjacent gears' teeth appear to interlock.
 
 GEAR SPECIFICATIONS:
 Each gear consists of:
@@ -73,6 +76,14 @@ Each gear has a label below it:
 - Font: regular, size 14
 - Color: gray RGB(100,100,100)
 
+GEAR MESHING:
+Adjacent gears are positioned approximately {center_distance}px apart (center to center).
+This creates a realistic meshing effect where:
+- The teeth of adjacent gears appear to interlock
+- Gears look like they can physically apply force to each other
+- The spacing prevents teeth overlap in the initial frame
+- The visual appearance suggests mechanical connection
+
 GREEN TOOTH CONFIGURATION:
 {greens_str}
 
@@ -82,11 +93,12 @@ CONNECTION BETWEEN LAST TWO GEARS:
 - G{num_gears-1} center: ({gears[num_gears-2]['x']}, {gears[num_gears-2]['y']})
 - G{num_gears} center: ({gears[num_gears-1]['x']}, {gears[num_gears-1]['y']})
 - Line connecting centers has angle: {connection_angle_deg:.1f}° from positive x-axis
-- Gears are positioned {int(math.sqrt((gears[num_gears-1]['x']-gears[num_gears-2]['x'])**2 + (gears[num_gears-1]['y']-gears[num_gears-2]['y'])**2))} pixels apart (center to center)
+- Gears are positioned {center_distance} pixels apart (center to center)
+- The teeth appear to mesh at the connection point between the gears
 
 ROTATION DIRECTION RULES:
 - G1 (first gear) rotates {first_direction}
-- Adjacent gears ALWAYS rotate in OPPOSITE directions
+- Adjacent gears ALWAYS rotate in OPPOSITE directions (due to meshing)
 - G1: {first_direction}
 - G2: {"counterclockwise" if first_direction == "clockwise" else "clockwise"}
 """
@@ -105,6 +117,7 @@ Therefore: G{num_gears} (last gear) rotates {last_direction}
 
 INITIAL STATE VISUAL ELEMENTS:
 - All {num_gears} gears visible with their 12 teeth and one green tooth each
+- Gears positioned close together with teeth appearing to mesh
 - G1 has a BLUE curved rotation arrow showing {first_direction} direction:
   Arrow properties:
   - Arc from -60° to 60° (clockwise) or 120° to 240° (counterclockwise)
@@ -128,28 +141,24 @@ INITIAL STATE VISUAL ELEMENTS:
   Color: green RGB(50,150,50)
 
 ANIMATION STOPPING CONDITION:
-The animation STOPS when the green teeth of G{num_gears-1} and G{num_gears} MEET.
+The animation STOPS at the FIRST TIME when the green teeth of G{num_gears-1} and G{num_gears} are 180 degrees apart.
 
-Meeting condition (all must be true):
+Stopping condition (all must be true):
 1. The green tooth of G{num_gears-1} points TOWARD G{num_gears}
    (tooth angle matches connection line angle {connection_angle_deg:.1f}° ± 3°)
    
 2. The green tooth of G{num_gears} points TOWARD G{num_gears-1}
    (tooth angle matches connection line angle + 180° = {(connection_angle_deg + 180) % 360:.1f}° ± 3°)
    
-3. This means the two green teeth are on opposite ends of the connecting line,
-   pointing at each other, essentially TOUCHING at the mesh point between gears.
+3. The two green teeth are positioned on opposite ends of the connecting line,
+   pointing at each other at the mesh point between gears.
 
-Mathematical formulation:
-- Let θ_conn = {connection_angle_deg:.1f}° (angle of line from G{num_gears-1} to G{num_gears})
-- Let θ_G{num_gears-1} = angle of green tooth on G{num_gears-1} (measured from +x axis)
-- Let θ_G{num_gears} = angle of green tooth on G{num_gears} (measured from +x axis)
-- STOP when: |θ_G{num_gears-1} - θ_conn| < 3° AND |θ_G{num_gears} - (θ_conn + 180°)| < 3°
+This is the FIRST occurrence of this 180-degree alignment during the rotation.
 
-ANIMATION SEQUENCE (Total: 64 frames at 10 FPS):
+ANIMATION SEQUENCE (Total: ~56 frames at 10 FPS):
 
 FRAMES 1-8: Hold initial state
-- All gears stationary
+- All gears stationary in meshing positions
 - G1 shows blue rotation arrow
 - G{num_gears} shows red "?" question mark
 - All green teeth visible at their initial angles
@@ -159,36 +168,24 @@ All gears rotate simultaneously according to their directions:
 - Gears with even indices (G1, G3, G5...): rotate {first_direction}
 - Gears with odd indices (G2, G4, G6...): rotate {"counterclockwise" if first_direction == "clockwise" else "clockwise"}
 - Rotation is smooth and continuous
+- The meshing appearance is maintained throughout
 - Frame rate: 10 FPS
-- Angular velocity: constant
-
-Each frame, check the stopping condition:
-- Calculate green tooth angle for G{num_gears-1}
-- Calculate green tooth angle for G{num_gears}
-- If both are on the connecting line (within 3° tolerance), STOP
+- Animation stops at FIRST TIME green teeth are 180° apart
 
 AT FRAME ~28 (70% progress):
-- Blue curved rotation arrows appear on ALL gears (except G{num_gears}):
+- Blue curved rotation arrows appear on ALL gears:
   Each arrow shows that gear's rotation direction
-  - G1: already has arrow (remains)
-  - G2 through G{num_gears-1}: new arrows appear
-  - Arrow specifications: RGB(50,50,200), 3px wide, with triangular arrowhead
   
-- G{num_gears} still shows "?" question mark
+- G{num_gears}'s "?" question mark still visible
 
 AT FRAME ~43 (90% progress):
 - G{num_gears} changes appearance:
   Body color changes to light green RGB(200,220,200) - HIGHLIGHTED
   "?" question mark is REMOVED
   Blue rotation arrow appears showing {last_direction} direction
-  
-- Text appears at bottom (10, 470):
-  "Green teeth meet - STOP"
-  Font: bold, size 12
-  Color: green RGB(50,150,50)
 
 FINAL STATE (Frame 48):
-- All gears stopped at the moment when:
+- All gears stopped at the FIRST TIME when:
   G{num_gears-1}'s green tooth angle = {connection_angle_deg:.1f}° (pointing toward G{num_gears})
   G{num_gears}'s green tooth angle = {(connection_angle_deg + 180) % 360:.1f}° (pointing toward G{num_gears-1})
   
@@ -204,7 +201,7 @@ FINAL STATE (Frame 48):
   Color: green RGB(50,150,50)
 
 - Text at (10, 30):
-  "Green teeth meet on connecting line!"
+  "Green teeth meet!"
   Font: bold, size 14
   Color: green RGB(50,150,50)
 
@@ -212,43 +209,19 @@ FINAL STATE (Frame 48):
 
 FRAMES 49-64: Hold final state (16 frames)
 
-LAYER ORDERING (bottom to top):
-1. White background RGB(255,255,255)
-2. Gear bodies (gray or light green)
-3. Center holes (dark gray)
-4. Gear teeth (gray or green)
-5. Rotation arrows (blue)
-6. Question mark or text labels
-7. Text annotations
-
-CRITICAL COLOR SPECIFICATIONS:
-- Background: RGB(255,255,255) white
-- Gear body (normal): RGB(180,180,180) light gray
-- Gear body (highlighted): RGB(200,220,200) light green
-- Gear outline: RGB(100,100,100) medium gray, 2px
-- Center hole: RGB(80,80,80) dark gray
-- Normal teeth: RGB(120,120,120) gray with RGB(80,80,80) outline
-- Green teeth: RGB(50,200,50) bright green with RGB(80,80,80) outline
-- Rotation arrows: RGB(50,50,200) blue, 3px wide
-- Question mark: RGB(200,50,50) red, size 24, bold
-- Labels (G1, G2...): RGB(100,100,100) gray, size 14
-- Top text (initial): RGB(50,50,150) dark blue
-- Top text (final): RGB(50,150,50) green
-- Bottom text (stop message): RGB(50,150,50) green
-
 PHYSICAL INTERPRETATION:
-When the animation stops, the green teeth are positioned such that:
-- They lie on the straight line connecting the two gear centers
-- They are 180° apart (on opposite sides of the connecting line)
-- They are essentially TOUCHING/MEETING at the point where the gears mesh
-- This represents the moment when these two specific teeth align perfectly
+- Adjacent gears appear to mesh realistically, with teeth interlocking
+- The close spacing creates the visual appearance of mechanical connection
+- When the animation stops, the green teeth are 180 degrees apart on the connecting line
+- This represents the FIRST TIME these specific teeth achieve this alignment
+- The alternating rotation directions are a direct consequence of the meshing
 
-ANSWER: G{num_gears} rotates {last_direction}, and the animation stops when its green tooth meets the green tooth of G{num_gears-1} on their connecting line."""
+ANSWER: G{num_gears} rotates {last_direction}, and the animation stops at the FIRST TIME its green tooth is 180 degrees apart from the green tooth of G{num_gears-1}."""
 
     return prompt
 
 
 def get_all_prompts() -> list[str]:
     return [
-        "Gear chain with green teeth. Gears rotate until green teeth of last two gears meet on their connecting line."
+        "Gear chain with realistic meshing. Gears rotate with teeth interlocking. Animation stops at FIRST TIME when green teeth of last two gears are 180 degrees apart."
     ]

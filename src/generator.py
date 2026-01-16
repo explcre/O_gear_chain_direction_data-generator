@@ -1,8 +1,10 @@
 """
-Gear Chain Direction Task Generator - Modified stopping condition.
+Gear Chain Direction Task Generator - Improved meshing and collision detection.
 
-NEW STOPPING CONDITION: Animation stops when the green teeth of the last two gears
-are 180 degrees apart (with respect to x-axis) for the FIRST time.
+NEW FEATURES:
+- Gears positioned closer together for realistic meshing appearance
+- Enhanced collision detection to prevent any teeth overlap in initial frame
+- Better initial angle calculation for proper gear alignment
 """
 
 import random
@@ -19,12 +21,14 @@ from .prompts import get_prompt
 
 
 class TaskGenerator(BaseGenerator):
-    """Gear chain direction task generator."""
+    """Gear chain direction task generator with realistic meshing."""
 
     def __init__(self, config: TaskConfig):
         super().__init__(config)
         self.renderer = ImageRenderer(image_size=config.image_size)
         self.num_teeth = 12
+        self.tooth_length = 15
+        self.tooth_width = 8
 
         self.video_generator = None
         if config.generate_videos and VideoGenerator.is_available():
@@ -56,7 +60,7 @@ class TaskGenerator(BaseGenerator):
         )
 
     def _generate_task_data(self) -> dict:
-        """Generate gear chain configuration with meeting condition."""
+        """Generate gear chain configuration with realistic meshing."""
         num_gears = random.randint(self.config.min_gears, self.config.max_gears)
         first_direction = random.choice(["clockwise", "counterclockwise"])
 
@@ -72,8 +76,10 @@ class TaskGenerator(BaseGenerator):
 
         width, height = self.config.image_size
         gear_radius = self.config.gear_radius
-        tooth_length = 15
-        gear_spacing = gear_radius * 2 + tooth_length * 2 + self.config.gear_gap
+
+        # Calculate spacing for realistic meshing
+        # Gears should just touch at their teeth tips with slight overlap
+        gear_spacing = gear_radius * 2 + self.tooth_length * 2 + self.config.gear_gap
 
         gears = []
 
@@ -124,12 +130,14 @@ class TaskGenerator(BaseGenerator):
                     else "clockwise"
                 )
 
-        rotation_angles = self._initialize_angles_no_overlap(gears, line_type)
+        # Initialize angles with enhanced collision prevention
+        rotation_angles = self._initialize_angles_with_meshing(gears, directions)
+
         green_tooth_indices = [
             random.randint(0, self.num_teeth - 1) for _ in range(num_gears)
         ]
 
-        # Calculate rotation needed for meeting condition - FIXED: added gears argument
+        # Calculate rotation needed for meeting condition
         final_rotation = self._calculate_180_degree_rotation(
             rotation_angles, green_tooth_indices, directions, num_gears, gears
         )
@@ -145,6 +153,156 @@ class TaskGenerator(BaseGenerator):
             "green_tooth_indices": green_tooth_indices,
             "final_rotation": final_rotation,
         }
+
+    def _get_tooth_positions(
+        self, gear: dict, angle: float
+    ) -> List[Tuple[float, float, float]]:
+        """Get all tooth tip positions and angles for a gear."""
+        radius = self.config.gear_radius
+        teeth = []
+
+        for i in range(self.num_teeth):
+            tooth_angle = angle + (2 * math.pi * i / self.num_teeth)
+            tip_x = gear["x"] + (radius + self.tooth_length) * math.cos(tooth_angle)
+            tip_y = gear["y"] + (radius + self.tooth_length) * math.sin(tooth_angle)
+            teeth.append((tip_x, tip_y, tooth_angle))
+
+        return teeth
+
+    def _check_teeth_collision(
+        self, gear1: dict, angle1: float, gear2: dict, angle2: float
+    ) -> bool:
+        """
+        Check if any teeth from two gears collide.
+        Uses precise distance checking between tooth tips.
+        """
+        teeth1 = self._get_tooth_positions(gear1, angle1)
+        teeth2 = self._get_tooth_positions(gear2, angle2)
+
+        # Calculate connection angle to focus on relevant teeth
+        dx = gear2["x"] - gear1["x"]
+        dy = gear2["y"] - gear1["y"]
+        connection_angle = math.atan2(dy, dx)
+
+        # Check teeth that face each other
+        min_safe_distance = self.tooth_width * 1.5  # Safety margin
+
+        for tip1_x, tip1_y, angle1_tooth in teeth1:
+            # Check if this tooth is facing toward gear2
+            angle_to_g2 = math.atan2(gear2["y"] - gear1["y"], gear2["x"] - gear1["x"])
+            angle_diff = abs(
+                (angle1_tooth - angle_to_g2 + math.pi) % (2 * math.pi) - math.pi
+            )
+
+            # Only check teeth roughly pointing toward the other gear
+            if angle_diff > math.pi / 2:
+                continue
+
+            for tip2_x, tip2_y, angle2_tooth in teeth2:
+                # Check if this tooth is facing toward gear1
+                angle_to_g1 = math.atan2(
+                    gear1["y"] - gear2["y"], gear1["x"] - gear2["x"]
+                )
+                angle_diff2 = abs(
+                    (angle2_tooth - angle_to_g1 + math.pi) % (2 * math.pi) - math.pi
+                )
+
+                if angle_diff2 > math.pi / 2:
+                    continue
+
+                # Calculate distance between tooth tips
+                dist = math.sqrt((tip1_x - tip2_x) ** 2 + (tip1_y - tip2_y) ** 2)
+
+                if dist < min_safe_distance:
+                    return True  # Collision detected
+
+        return False  # No collision
+
+    def _initialize_angles_with_meshing(
+        self, gears: List[dict], directions: List[str]
+    ) -> List[float]:
+        """
+        Initialize gear rotation angles ensuring:
+        1. NO teeth overlap between ANY adjacent gears in first frame
+        2. Gears appear to mesh realistically
+
+        Strategy: For each gear pair, keep rotating the second gear until no overlap.
+        """
+        num_gears = len(gears)
+
+        # Start with strategic initial angles
+        angles = []
+        tooth_angle_step = 2 * math.pi / self.num_teeth
+
+        for i in range(num_gears):
+            if i == 0:
+                # First gear: random angle
+                angles.append(random.uniform(0, 2 * math.pi))
+            else:
+                # For subsequent gears, calculate angle that meshes well
+                prev_gear = gears[i - 1]
+                curr_gear = gears[i]
+
+                # Calculate connection angle
+                dx = curr_gear["x"] - prev_gear["x"]
+                dy = curr_gear["y"] - prev_gear["y"]
+                connection_angle = math.atan2(dy, dx)
+
+                # Start with an angle that offsets teeth by half a tooth
+                initial_angle = connection_angle + math.pi + tooth_angle_step / 2
+                angles.append(initial_angle)
+
+        # CRITICAL: Ensure ZERO overlap for each adjacent pair
+        # Keep rotating until no teeth overlap
+        adjustment_step = math.pi / 360  # Small steps (0.5 degrees)
+        max_iterations = 720  # Allow 2 full rotations worth of checks
+
+        for i in range(num_gears - 1):
+            iteration = 0
+
+            # Keep rotating the second gear until no collision
+            while iteration < max_iterations:
+                if not self._check_teeth_collision(
+                    gears[i], angles[i], gears[i + 1], angles[i + 1]
+                ):
+                    # Success! No collision found
+                    break
+
+                # Rotate the second gear slightly
+                angles[i + 1] += adjustment_step
+                angles[i + 1] = angles[i + 1] % (2 * math.pi)
+                iteration += 1
+
+            # If still colliding after many attempts, try adjusting first gear
+            if iteration >= max_iterations:
+                iteration = 0
+                while iteration < max_iterations:
+                    if not self._check_teeth_collision(
+                        gears[i], angles[i], gears[i + 1], angles[i + 1]
+                    ):
+                        break
+
+                    # Rotate the first gear slightly
+                    angles[i] += adjustment_step
+                    angles[i] = angles[i] % (2 * math.pi)
+                    iteration += 1
+
+                # Final check: try adjusting both
+                if iteration >= max_iterations:
+                    # Try alternating adjustments
+                    for final_iter in range(max_iterations):
+                        if not self._check_teeth_collision(
+                            gears[i], angles[i], gears[i + 1], angles[i + 1]
+                        ):
+                            break
+                        if final_iter % 2 == 0:
+                            angles[i + 1] += adjustment_step
+                            angles[i + 1] = angles[i + 1] % (2 * math.pi)
+                        else:
+                            angles[i] += adjustment_step
+                            angles[i] = angles[i] % (2 * math.pi)
+
+        return angles
 
     def _calculate_180_degree_rotation(
         self,
@@ -167,11 +325,7 @@ class TaskGenerator(BaseGenerator):
 
         dx = gear_last["x"] - gear_second_last["x"]
         dy = gear_last["y"] - gear_second_last["y"]
-        connection_angle = math.atan2(dy, dx)  # Angle from second-to-last to last
-
-        # Target:
-        # - Second-to-last gear's green tooth should point TOWARD last gear (angle = connection_angle)
-        # - Last gear's green tooth should point TOWARD second-to-last gear (angle = connection_angle + π)
+        connection_angle = math.atan2(dy, dx)
 
         # Current green tooth angles (before rotation)
         base_angle_second_last = rotation_angles[second_last_idx] + (
@@ -220,97 +374,6 @@ class TaskGenerator(BaseGenerator):
         # Fallback
         return math.pi / 3
 
-    def _initialize_angles_no_overlap(
-        self, gears: List[dict], line_type: str
-    ) -> List[float]:
-        """Initialize gear rotation angles ensuring no teeth overlap between adjacent gears."""
-        num_gears = len(gears)
-        angles = [random.uniform(0, 2 * math.pi) for _ in range(num_gears)]
-
-        def get_connection_angle(g1: dict, g2: dict) -> float:
-            dx = g2["x"] - g1["x"]
-            dy = g2["y"] - g1["y"]
-            return math.atan2(dy, dx)
-
-        def teeth_overlap(
-            gear1: dict, angle1: float, gear2: dict, angle2: float
-        ) -> bool:
-            radius = self.config.gear_radius
-            tooth_length = 15
-            tooth_width = 8
-
-            teeth1 = []
-            teeth2 = []
-
-            for i in range(self.num_teeth):
-                tooth_angle1 = angle1 + (2 * math.pi * i / self.num_teeth)
-                tip_x1 = gear1["x"] + (radius + tooth_length) * math.cos(tooth_angle1)
-                tip_y1 = gear1["y"] + (radius + tooth_length) * math.sin(tooth_angle1)
-                teeth1.append((tip_x1, tip_y1, tooth_angle1))
-
-                tooth_angle2 = angle2 + (2 * math.pi * i / self.num_teeth)
-                tip_x2 = gear2["x"] + (radius + tooth_length) * math.cos(tooth_angle2)
-                tip_y2 = gear2["y"] + (radius + tooth_length) * math.sin(tooth_angle2)
-                teeth2.append((tip_x2, tip_y2, tooth_angle2))
-
-            connection_angle = get_connection_angle(gear1, gear2)
-
-            for t1 in teeth1:
-                angle_to_g2 = math.atan2(
-                    gear2["y"] - gear1["y"], gear2["x"] - gear1["x"]
-                )
-                tooth_dir_diff = abs(
-                    (t1[2] - angle_to_g2 + math.pi) % (2 * math.pi) - math.pi
-                )
-                if tooth_dir_diff > math.pi / 3:
-                    continue
-
-                for t2 in teeth2:
-                    angle_to_g1 = math.atan2(
-                        gear1["y"] - gear2["y"], gear1["x"] - gear2["x"]
-                    )
-                    tooth_dir_diff2 = abs(
-                        (t2[2] - angle_to_g1 + math.pi) % (2 * math.pi) - math.pi
-                    )
-                    if tooth_dir_diff2 > math.pi / 3:
-                        continue
-
-                    dist = math.sqrt((t1[0] - t2[0]) ** 2 + (t1[1] - t2[1]) ** 2)
-                    if dist < tooth_width * 2:
-                        return True
-
-            return False
-
-        max_iterations = 100
-        angle_step = 2 * math.pi / self.num_teeth / 4
-
-        for i in range(num_gears - 1):
-            gear1 = gears[i]
-            gear2 = gears[i + 1]
-
-            iteration = 0
-            while (
-                teeth_overlap(gear1, angles[i], gear2, angles[i + 1])
-                and iteration < max_iterations
-            ):
-                angles[i + 1] += angle_step
-                if angles[i + 1] > 2 * math.pi:
-                    angles[i + 1] -= 2 * math.pi
-                iteration += 1
-
-            if iteration >= max_iterations:
-                iteration = 0
-                while (
-                    teeth_overlap(gear1, angles[i], gear2, angles[i + 1])
-                    and iteration < max_iterations
-                ):
-                    angles[i] += angle_step
-                    if angles[i] > 2 * math.pi:
-                        angles[i] -= 2 * math.pi
-                    iteration += 1
-
-        return angles
-
     def _draw_gear(
         self,
         draw: ImageDraw.Draw,
@@ -340,9 +403,6 @@ class TaskGenerator(BaseGenerator):
             fill=(80, 80, 80),
         )
 
-        tooth_length = 15
-        tooth_width = 8
-
         for i in range(self.num_teeth):
             angle = rotation_angle + (2 * math.pi * i / self.num_teeth)
 
@@ -352,11 +412,11 @@ class TaskGenerator(BaseGenerator):
             base_x = x + (radius - 5) * math.cos(angle)
             base_y = y + (radius - 5) * math.sin(angle)
 
-            tip_x = x + (radius + tooth_length) * math.cos(angle)
-            tip_y = y + (radius + tooth_length) * math.sin(angle)
+            tip_x = x + (radius + self.tooth_length) * math.cos(angle)
+            tip_y = y + (radius + self.tooth_length) * math.sin(angle)
 
             perp_angle = angle + math.pi / 2
-            half_width = tooth_width / 2
+            half_width = self.tooth_width / 2
 
             points = [
                 (
@@ -544,7 +604,7 @@ class TaskGenerator(BaseGenerator):
         draw.text(
             (10, 10), f"G{num_gears} rotates {last_dir}", fill=(50, 150, 50), font=font
         )
-        draw.text((10, 30), "Green teeth 180° apart!", fill=(50, 150, 50), font=font)
+        draw.text((10, 30), "Green teeth meet!", fill=(50, 150, 50), font=font)
 
         return img
 
@@ -580,22 +640,6 @@ class TaskGenerator(BaseGenerator):
                 rotation_offset=rotation,
                 highlight_last=(progress > 0.9),
             )
-
-            draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype(
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12
-                )
-            except:
-                font = ImageFont.load_default()
-
-            if progress > 0.9:
-                draw.text(
-                    (10, 470),
-                    "Green teeth 180° apart - STOP",
-                    fill=(50, 150, 50),
-                    font=font,
-                )
 
             frames.append(img)
 

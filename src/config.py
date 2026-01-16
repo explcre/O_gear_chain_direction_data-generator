@@ -20,11 +20,11 @@ class TaskConfig(GenerationConfig):
     generate_videos: bool = Field(default=True)
     video_fps: int = Field(default=10)
     
-    # Gear chain settings
+    # Gear chain settings - UPDATED FOR REALISTIC MESHING
     min_gears: int = Field(default=3, description="Minimum number of gears")
     max_gears: int = Field(default=6, description="Maximum number of gears")
     gear_radius: int = Field(default=40, description="Radius of each gear")
-    gear_gap: int = Field(default=15, description="Gap between adjacent gears (prevents overlap)")
+    gear_gap: int = Field(default=-8, description="Gap between adjacent gears (negative creates meshing)")
     
     # Colors
     bg_color: tuple[int, int, int] = Field(default=(255, 255, 255))
